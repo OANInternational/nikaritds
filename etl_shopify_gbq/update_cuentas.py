@@ -83,6 +83,12 @@ def getimages(x):
         return ''
     elif(len(x)==0):
         return ''
+    elif('drive_url' in x[0].keys()):
+        download_url = x[0]['drive_url']
+        if(download_url == None):
+            return ''
+        else:
+            return download_url
     elif('download_url' in x[0].keys()):
         download_url = x[0]['download_url']
         if(download_url == None):
