@@ -5,7 +5,6 @@ import os
 import pandas as pd
 
 #bigquery
-import pandas_gbq
 from google.cloud import bigquery
 
 #FIREBASE
@@ -17,9 +16,11 @@ from firebase_admin import firestore
 from dotenv import load_dotenv
 load_dotenv('/Users/daniel/OAN/credentials/contoan/.env')
 
+print('beginning etl of accounting ... ')
+
 ## OPEN CONECTION TO BIGQUERRY
-client = bigquery.Client()
-dataset_id = "{}.contoan".format(client.project)
+bgq_client = bigquery.Client()
+dataset_id = "{}.contoan".format(bgq_client.project)
 dataset = bigquery.Dataset(dataset_id)
 
 #OPEN CONECTION TO FIREBASE
@@ -79,24 +80,23 @@ accounting['creation_date'] = pd.to_datetime(accounting['creation_date'],utc=Tru
 accounting['execution_date'] = pd.to_datetime(accounting['execution_date'],utc=True)
 
 def getimages(x):
+    receipt = ''
     if not (x):
-        return ''
+        return receipt
     elif(len(x)==0):
-        return ''
+        return receipt
     elif('drive_url' in x[0].keys()):
         download_url = x[0]['drive_url']
-        if(download_url == None):
-            return ''
-        else:
+        if(download_url != None):
             return download_url
     elif('download_url' in x[0].keys()):
         download_url = x[0]['download_url']
-        if(download_url == None):
-            return ''
-        else:
+        if(download_url != None):
             return download_url
     else:
         return ''
+    
+    return receipt
     
 accounting['receipt']=accounting.images.apply(lambda x: getimages(x))
 
@@ -107,5 +107,8 @@ df = accounting[['concept', 'place', 'creation_date', 'vat', 'description', 'amo
        'intervention', 'target_id', 'vat_amount', 'receipt']]
 
 table_id = "{}.accounting".format(dataset.dataset_id)
+proj = bgq_client.project
 
-pandas_gbq.to_gbq(df, table_id, project_id=client.project, if_exists='replace')
+df.to_gbq(table_id,proj,if_exists='replace')
+
+print('done.')
