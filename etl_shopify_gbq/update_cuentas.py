@@ -67,6 +67,8 @@ def clean_vat_amount(x):
         vat=x['vat']
         if not(vat >=0):
             vat=0
+        elif x['account_id']=="I6vsoTqCKFAS1AK09qzW":
+            vat=0
     vat_amount=amount*(1-1/(1+vat/100))
 
     #a=db.collection(u'Accounting').document(doc_id).update({'vat_amount':vat_amount})

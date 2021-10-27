@@ -157,17 +157,20 @@ df_ventas["subtotal_price"] = df_ventas["subtotal_price_2"]
 df_ventas = df_ventas.drop('subtotal_price_2',axis=1)
 
 
-client = bigquery.Client()
-dataset_id = "{}.contoan".format(client.project)
+bgq_client = bigquery.Client()
+dataset_id = "{}.contoan".format(bgq_client.project)
 dataset = bigquery.Dataset(dataset_id)
+
+cols = list(df_ventas.columns)
+cols.sort()
 
 #subir a bigquery
 table_id = "contoan.sales"
 
-pandas_gbq.to_gbq(df_ventas, table_id, project_id=client.project, if_exists='replace')
+df_ventas[cols].to_gbq(table_id, project_id=bgq_client.project, if_exists='replace')
 
 ##MODIFICAR BOOL VARIABLES
-client.query("""
+bgq_client.query("""
 CREATE OR REPLACE TABLE `oan-nikarit.contoan.sales` AS
 SELECT
   * EXCEPT (buyer_accepts_marketing,taxes_included),
