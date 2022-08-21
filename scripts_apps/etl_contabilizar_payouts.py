@@ -45,6 +45,7 @@ BANCOSTRIPE = "iA9Pzv2CImjItzwCaQv0"
 GENERAL2022NIKARIT = "WYTJNewInibo0kumno7l"
 NIKARIT = "0DmODGTOEiM5lg9SGx0J"
 FIREBASEACCOUNT = "oXJJEfAEPxFYtdJ2pnaU"
+COLUMNAMATCHID = "G"
 
 
 ##connect to gsheets
@@ -175,15 +176,14 @@ result = sheet.values().get(spreadsheetId=SPREADSHEET_ID,
                             range=DATA_TO_PULL).execute()
 data = result.get('values', [])
 
-colsInSheet = data[0]+['SPLIT'+str(a) for a in [2,3,4,5,6]]
-df = pd.DataFrame(data[1:], columns=colsInSheet)
+df = pd.DataFrame(data[1:], columns=data[0])
 
 ### data treatment
 df['IMPORTE'] = df['IMPORTE'].str[:-2].str.replace('.','',regex=False).str.replace(',','.',regex=False)
 df['date'] = pd.to_datetime(df['FECHA'],format="%d/%m/%Y").apply(str).str[0:10]
 
 maxDate = df['date'].max()
-print('Ultimo payout en Diario 2022 {}'.format(maxDate))
+print('Ultimo registro en Diario 2022 {}'.format(maxDate))
 
 
 r = requests.get(shop_url+"/shopify_payments/payouts.json",
@@ -258,7 +258,7 @@ for payout in payoutsExcel[::-1]:
     row = df[(df['date'] == date) &
            (df['IMPORTE'] == importe)].index[0]+2
     ##update google sheet to values
-    update_values("'Caja de Ingenieros'!G"+str(row),
+    update_values("'Caja de Ingenieros'!"+COLUMNAMATCHID+str(row),
               [
                   [doc_acc_id]
               ])
