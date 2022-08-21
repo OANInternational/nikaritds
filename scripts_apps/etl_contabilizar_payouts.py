@@ -7,7 +7,8 @@ Registra primero el movimiento en Firebase y luego inserta el id en la columna d
 Ademas actualiza el saldo de Caja de Ingenieros y Stripe trans registrar todos los movimientos y el counter.
 
 MEJORAS A IMPLEMENTAR:
-La columna en donde se encuentra el MATCH ID estan hardcodeadas. Debería detectarse por si algun usuario inserta columnas en las hojas.
+-La columna en donde se encuentra el MATCH ID estan hardcodeadas. Debería detectarse por si algun usuario inserta columnas en las hojas.
+-Borrar convertData(acc) y hacerlo bien con la nueva estructura de datos
 '''
 
 # Imports
@@ -64,6 +65,7 @@ if not creds or creds.invalid:
 sheets_service = discovery.build('sheets', 'v4', http=creds.authorize(Http()))
 SPREADSHEET_ID = os.environ['DIARIO_2022']
 
+##ACTUALIZAR UN VALOR EN GSHEET
 def update_values(range_name,values):
     """
     Creates the batch_update the user has access to.
@@ -94,7 +96,7 @@ def update_values(range_name,values):
 
 
 
-# Use a service account
+## CONNECT TO FIREBASE
 cred = credentials.Certificate(filename)
 firebase_admin.initialize_app(cred)
 
@@ -126,6 +128,7 @@ mappedContextFields = {
     'origin': 'createdByType'
 }
 
+## PARA REUTILIZAR ANTERIOR SCRIPT CONVIERTO LOS DATOS
 def convertData(acc):
     accItem = dict()
     accKeys = acc.keys()

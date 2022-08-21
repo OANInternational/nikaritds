@@ -58,7 +58,7 @@ ADMINGENERAL = "4zcptWXv2IqQFkIMz2MP"
 GENERAL2022 = "cTJa8TovRmSJEdu5stdc"
 DONACIONESACCOUNT = "I6vsoTqCKFAS1AK09qzW"
 
-
+##ACTUALIZAR UN VALOR EN GSHEET
 def update_values(range_name,values):
     """
     Creates the batch_update the user has access to.
@@ -112,15 +112,21 @@ meses = {
     12: 'diciembre'
 }
 
+##GET DONATIONS DATA
 DATA_TO_PULL = "Sheet1" ##SSName
 result = sheet.values().get(spreadsheetId=DONANTES_ID,
                             range=DATA_TO_PULL).execute()
 data = result.get('values', [])
 dfDonantes = pd.DataFrame(data[1:], columns=data[0])
+##TRANSFORM DATA
 dfDonantes['cantidad'] = dfDonantes['cantidad'].apply(float)
+
+##CONVERT TO DICT
 dfDictDonantes = dfDonantes.T.to_dict()
 donantes = [dfDictDonantes[a] for a in dfDictDonantes]
 
+
+### GET DATA FROM 3 TABS OF DIARIO2022
 sheetsTabs = ['Banco Santander','Caja de Ingenieros','Paypal']
 dataFrames = []
 
@@ -144,23 +150,26 @@ dictDf = dict(zip(bancos,dataFrames))
 dictSheetTab = dict(zip(bancos,sheetsTabs))
 dictSheetTabColum = dict(zip(bancos,["F","G","AP"]))
 
-##GEtInfoOAN
+##GEtInfoOAN of last counter
 
 counter_OAN = db.collection('info').document(OANACCOUNT+'-accountingItems').get().to_dict()
 counter_OAN["counter"]
 
-##LOOP POR TODOS LOS DONANTEStoday = datetime.today()
+##LOOP POR TODOS LOS DONANTES
 today = datetime.today()
 todayIso = today.isoformat()[:-3]+"Z"
 i=counter_OAN["counter"]+1
 donaciones2=[]
 nRegistros = 0
 for donante in donantes:
+    ## DATOS DEL DONANTE
     nom = donante['nombre']
     importe = donante["cantidad"]
     banco = donante['banco']
     sheetTab = dictSheetTab[banco]
     sheetTabColumn = dictSheetTabColum[banco]
+    
+    ## MIRAR SI HAY ALGUN REGISTRO SIN MATCHEAR Y SIN REGISTRAR
     df = dictDf[banco]
     porRegistrar = df[(df['CONCEPTO'].str.contains(donante["conceptoDiario"],case=False,regex=False)) &
                        ((df['MATCH IDs'].isna()) | (df['MATCH IDs'] == "")) &
@@ -171,10 +180,13 @@ for donante in donantes:
     
     porRegistrar['concepto'] = "Donación "+nom+" "+porRegistrar['year month']
     registrar = porRegistrar.T.to_dict()
+    
+    ##SI HAY ALGUNO SIN REGISTRAR REGISTRARLO
     for r in registrar:
         concept = registrar[r]['concepto']
         exDate = datetime.fromisoformat(registrar[r]['date']).isoformat()+".000Z"
         row = registrar[r]['index']+2
+        ##DATOS DEL REGISTRO
         don_conta={
                     "amount":importe,
                     "baseAmount":importe,
@@ -205,9 +217,10 @@ for donante in donantes:
                     "vat": 0,
                     "vatAmount":0   
                 }
-        
+        ##AUMENTAR EL CONTANDOR
         i=i+1
-
+        
+        ##REGISTRARLO
         doc_acc = db.collection(u'accountingItems').add(don_conta)[1]
         doc_acc_id = doc_acc.id
         doc_acc.update({'context.id':doc_acc_id})
@@ -219,11 +232,13 @@ for donante in donantes:
                   ])
 
         don_conta['context']['id'] = doc_acc_id
+        
+        ##GUARDAR LA INFO DE LOS YA REGISTRADOS
         donaciones2.append(don_conta)
         nRegistros = nRegistros+1
         
 if nRegistros == 0:
-     print('Todas las donaciones han sido registradas')
+     print('Todas las donaciones ya habían sido registradas')
     
 else:
     for j, don in enumerate(donaciones2):
