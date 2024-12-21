@@ -22,7 +22,7 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 
-filename=os.environ['FIREBASE_FILENAME']
+filename=os.environ['FIREBASE_MIONG_FILENAME']
 
 #OPEN CONECTION TO FIREBASE
 cred = credentials.Certificate(filename)
@@ -30,7 +30,9 @@ firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-col_query = db.collection('Nikarit_Sales').stream()
+OAN_account = "5Tv2u4n8BReebmKUNIuN"
+
+col_query = db.collection('shopSales').where(u'context.account', u'==',OAN_account).stream()
 
 ventas = []
 for acc in col_query:
@@ -79,27 +81,11 @@ df_ventas['client_gender'] = df_ventas.apply(lambda x:
                             else 'N/A' , axis =1)
 
 
-## METER DONACIONES
-def don(x):
-    total_price = x['total_price']
-    subtotal_price = x['subtotal_price']
-    fecha = str(x['creation_date']).split(' ')[0]
-    origin = x['origin']
-    don = 0.0
-    if '2020-11-01' < fecha and origin == "Shopify":
-        if total_price < 40:
-            don = total_price - subtotal_price - 5.50
-        else:
-            don = total_price - subtotal_price
-            
-    return don
-
-df_ventas['donation'] = df_ventas.apply(lambda x: don(x),axis=1)
-
 ## METER PROVINCIA
 shop_url = os.environ['SHOPIFY_ACCESS_URL']
 dates = ['2019-01-01T00:15:47-04:00','2020-01-01T00:15:47-04:00',
-         '2020-05-01T00:15:47-04:00','2020-12-10T00:15:47-04:00', '2021-01-10T00:15:47-04:00']
+         '2020-05-01T00:15:47-04:00','2020-12-10T00:15:47-04:00', '2021-01-10T00:15:47-04:00',
+        '2021-09-01T00:15:47-04:00']
 l_orders = []
 
 for date_min,date_max in zip(dates[:-1],dates[1:]):

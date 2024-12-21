@@ -8,6 +8,9 @@ Ademas actualiza el saldo de Caja de Ingenieros y Stripe tras registrar todos lo
 
 MEJORAS A IMPLEMENTAR:
 -Que la funcion onCreate actualice también el counter
+
+CAMBIOS
+Unicamente matchear y no registrar donacion - a la espera de bton de registro mensual de donaciones.
 '''
 
 # Imports
@@ -171,7 +174,8 @@ result = sheet.values().get(spreadsheetId=SPREADSHEET_ID,
                             range=DATA_TO_PULL).execute()
 data = result.get('values', [])
 colsInSheet = data[0]
-df = pd.DataFrame(data[1:], columns=colsInSheet)
+df_base = pd.DataFrame(data[1:], columns=colsInSheet)
+df = df_base[df_base['FECHA'] != ""].copy()
 
 ### data treatment
 df['Stripe'] = df['CONCEPTO'] == "TRANSF CTA DE:Stripe Technology"

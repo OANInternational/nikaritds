@@ -7,7 +7,7 @@ registradas, es decir las que no tienen matchId.
 Registra primero el movimiento en Firebase y luego inserta el id en la columna de matchId
 
 MEJORAS A IMPLEMENTAR:
-Las columnas en donde se encuentra el MATCH ID estan hardcodeadas - dictSheetTabColum. Debería detectarse por si algun usuario inserta columnas en las hojas.
+-A revisar
 '''
 
 # Imports
@@ -17,35 +17,31 @@ import requests
 import yaml
 import json
 import os
-import firebase_admin
+
+import string
+
 from datetime import datetime
 
 #Firbease (pip install firebase_admin)
+import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 
+#Gsheets
+import googleapiclient.discovery
+from google.oauth2 import service_account
+## google cloud
+import google.auth.transport.requests as grequests
+from google.oauth2.id_token import fetch_id_token
+
 from dotenv import load_dotenv
  
-load_dotenv(dotenv_path='/Users/daniel/OAN/credentials/contoan/.env')
+load_dotenv(dotenv_path='/Users/daniel/OAN/credentials/miong/.env')
 
-## Conect to GSHEETS
-from oauth2client import file,client, tools
-from googleapiclient import discovery
-from httplib2 import Http
 
-SCOPES = ['https://www.googleapis.com/auth/drive',
-          'https://www.googleapis.com/auth/spreadsheets'
-        ]
-store = file.Storage('/Users/daniel/OAN/credentials/storage.json')
-creds = store.get()
-if not creds or creds.invalid:
-    flow = client.flow_from_clientsecrets('/Users/daniel/OAN/credentials/credentials.json', SCOPES)
-    flags= tools.argparser.parse_args(args=[])
-    creds = tools.run_flow(flow, store, flags=flags)
-    
 
-sheets_service = discovery.build('sheets', 'v4', http=creds.authorize(Http()))
-sheet = sheets_service.spreadsheets()
+cloudCreds = os.environ['CLOUD_CREDS']
+
 SPREADSHEET_ID = os.environ['DIARIO_2022']
 DONANTES_ID = os.environ['DONANTES_ID']
 OANACCOUNT = "5Tv2u4n8BReebmKUNIuN"
@@ -57,6 +53,24 @@ USERDANI = "z5m936GA0t3vHM28QKhR"
 ADMINGENERAL = "4zcptWXv2IqQFkIMz2MP"
 GENERAL2022 = "cTJa8TovRmSJEdu5stdc"
 DONACIONESACCOUNT = "I6vsoTqCKFAS1AK09qzW"
+BOT_USER_ID = "oXJJEfAEPxFYtdJ2pnaU"
+
+URL_onCreateAccountingItemAPI = "https://us-central1-oan-miong.cloudfunctions.net/onCreateAccountingItemAPI"
+
+today = datetime.today()
+todayIso = today.isoformat()[:-3]+"Z"
+
+##connect to gsheets
+## CONECTION TO DRIVE
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+cloudCredentials = service_account.Credentials.from_service_account_file(
+        cloudCreds, scopes=SCOPES)
+
+sheets_service = googleapiclient.discovery.build('sheets', 'v4', credentials=cloudCredentials)
+sheet = sheets_service.spreadsheets()
+
 
 ##ACTUALIZAR UN VALOR EN GSHEET
 def update_values(range_name,values):
@@ -87,10 +101,51 @@ def update_values(range_name,values):
         return error
 
 
+##CREATE A DONATION DATA DICT
+def createDonation(importe,concept,exDate,banco,i):
+    randomId = db.collection('tmp').document().id
+    
+    data={
+            "amount":importe,
+            "baseAmount":importe,
+            "code":i,
+            "concept":concept,
+            "context":{
+                "account":OANACCOUNT,
+                "createdAt":todayIso,
+                "createdBy":BOT_USER_ID,
+                "createdByType":"user",
+                "id":randomId,
+                "lastUpdateAt":todayIso,
+                "lastUpdateBy":""
+            },
+            "description":concept.replace("ó","o"),
+            "executedAt":exDate,
+            "files":None,
+            "originAccountingAccount":DONACIONESACCOUNT,
+            "originIntervention":None, 
+            "originPhase": None,
+            "originProject": None,
+            "responsible":USERDANI,
+            "tags":["spain"],
+            "targetAccountingAccount":banco,
+            "targetIntervention":GENERAL2022, 
+            "targetPhase": None,
+            "targetProject": ADMINGENERAL,
+            "type":"income",
+            "vat": 0,
+            "vatAmount":0   
+        }
+    
+    accountItem = {
+                    "data": data
+                    }
+    return accountItem
+
+
 ##ACESS TO FIREBASE
-filename=os.environ['FIREBASE_MIONG_FILENAME']
 # Use a service account
-cred = credentials.Certificate(filename)
+cred = credentials.Certificate(cloudCreds)
 firebase_admin.initialize_app(cred)
 
 db = firestore.client()
@@ -129,26 +184,34 @@ donantes = [dfDictDonantes[a] for a in dfDictDonantes]
 ### GET DATA FROM 3 TABS OF DIARIO2022
 sheetsTabs = ['Banco Santander','Caja de Ingenieros','Paypal']
 dataFrames = []
+matchRows = []
 
 for tab in sheetsTabs:
     DATA_TO_PULL = tab ##SSName
     result = sheet.values().get(spreadsheetId=SPREADSHEET_ID,
                                 range=DATA_TO_PULL).execute()
     data = result.get('values', [])
-    df = pd.DataFrame(data[1:], columns=data[0])
+    colsInSheet=data[0]
+    df = pd.DataFrame(data[1:], columns=colsInSheet)
     df['IMPORTE'] = df['IMPORTE'].str[:-2].str.replace('.','',regex=False).str.replace(',','.',regex=False)
     df['IMPORTE'] = df['IMPORTE'].apply(lambda x: 0 if x=="" else float(x))
+    df["NoMatcheado"] = (df['MATCH IDs'].isna()) | (df['MATCH IDs'] == "")
     df['date'] = pd.to_datetime(df['FECHA'],format="%d/%m/%Y").apply(str).str[0:10]
     df['year'] = pd.DatetimeIndex(df['date']).year
     df['month'] = pd.DatetimeIndex(df['date']).month
     df['month'] = df['month'].apply(lambda x: meses[x])
     df['year month'] = df['year'].apply(str) + " " + df['month']
-    dataFrames.append(df[['date','year month','IMPORTE','CONCEPTO','MATCH IDs']])
+    dataFrames.append(df[['date','year month','IMPORTE','CONCEPTO','MATCH IDs',"NoMatcheado"]])
+    
+    ## COGER COLUMNA DE MATCHING Id
+    alphabetList = list(string.ascii_uppercase)+['A'+b for b in list(string.ascii_uppercase)]
+    matchRow=alphabetList[colsInSheet.index("MATCH IDs")]
+    matchRows.append(matchRow)
 
 bancos = [BANCOSANTANDER,CAJAINGENIEROS,BANCOPAYPAL]
 dictDf = dict(zip(bancos,dataFrames))
 dictSheetTab = dict(zip(bancos,sheetsTabs))
-dictSheetTabColum = dict(zip(bancos,["F","G","AP"]))
+dictSheetTabColum = dict(zip(bancos,matchRows))
 
 ##GEtInfoOAN of last counter
 
@@ -156,11 +219,19 @@ counter_OAN = db.collection('info').document(OANACCOUNT+'-accountingItems').get(
 counter_OAN["counter"]
 
 ##LOOP POR TODOS LOS DONANTES
-today = datetime.today()
-todayIso = today.isoformat()[:-3]+"Z"
+#Initiate variables
 i=counter_OAN["counter"]+1
 donaciones2=[]
 nRegistros = 0
+
+##PREPARE CALL
+#sent data to function
+url = URL_onCreateAccountingItemAPI
+auth_req = grequests.Request()
+id_token = fetch_id_token(auth_req, url)
+headers = {"Authorization":"Bearer {}".format(id_token),
+           'Content-type': 'application/json'}
+
 for donante in donantes:
     ## DATOS DEL DONANTE
     nom = donante['nombre']
@@ -172,7 +243,7 @@ for donante in donantes:
     ## MIRAR SI HAY ALGUN REGISTRO SIN MATCHEAR Y SIN REGISTRAR
     df = dictDf[banco]
     porRegistrar = df[(df['CONCEPTO'].str.contains(donante["conceptoDiario"],case=False,regex=False)) &
-                       ((df['MATCH IDs'].isna()) | (df['MATCH IDs'] == "")) &
+                       (df["NoMatcheado"]) &
                         (df['IMPORTE'] == donante["cantidad"])][['date','year month']].reset_index()
     
     if porRegistrar.shape[0] == 0:
@@ -187,56 +258,27 @@ for donante in donantes:
         exDate = datetime.fromisoformat(registrar[r]['date']).isoformat()+".000Z"
         row = registrar[r]['index']+2
         ##DATOS DEL REGISTRO
-        don_conta={
-                    "amount":importe,
-                    "baseAmount":importe,
-                    "code":i,
-                    "concept":concept,
-                    "context":{
-                        "account":OANACCOUNT,
-                        "createdAt":todayIso,
-                        "createdBy":USERDANI,
-                        "createdByType":"user",
-                        "lastUpdateAt":todayIso,
-                        "lastUpdateBy":""
-                    },
-                    "description":concept.replace("ó","o"),
-                    "executedAt":exDate,
-                    "files":None,
-                    "originAccountingAccount":DONACIONESACCOUNT,
-                    "originIntervention":None, 
-                    "originPhase": None,
-                    "originProject": None,
-                    "responsible":USERDANI,
-                    "tags":["spain"],
-                    "targetAccountingAccount":banco,
-                    "targetIntervention":GENERAL2022, 
-                    "targetPhase": None,
-                    "targetProject": ADMINGENERAL,
-                    "type":"income",
-                    "vat": 0,
-                    "vatAmount":0   
-                }
+        accountingItem = createDonation(importe,concept,exDate,banco,i)
+        accountingItemId = accountingItem['data']['context']['id']
         ##AUMENTAR EL CONTANDOR
         i=i+1
         
-        ##REGISTRARLO
-        doc_acc = db.collection(u'accountingItems').add(don_conta)[1]
-        doc_acc_id = doc_acc.id
-        doc_acc.update({'context.id':doc_acc_id})
+        #sent data to function
+        r = grequests.requests.post(url, json=accountingItem,headers=headers)
 
         ##update google sheet to values
         update_values("'"+sheetTab+"'!"+sheetTabColumn+str(row),
                   [
-                      [doc_acc_id]
+                      [accountingItemId]
                   ])
-
-        don_conta['context']['id'] = doc_acc_id
         
         ##GUARDAR LA INFO DE LOS YA REGISTRADOS
-        donaciones2.append(don_conta)
+        donaciones2.append(accountingItem['data'])
         nRegistros = nRegistros+1
         
+#actualizar el counter
+db.collection('info').document(OANACCOUNT+'-accountingItems').update({'counter':i})
+
 if nRegistros == 0:
      print('Todas las donaciones ya habían sido registradas')
     
