@@ -16,6 +16,7 @@ jupyter-core = "^5.7.2"
 pandas-gbq = "^0.26.0"
 pyarrow = "^18.1.0"
 google-cloud = "^0.34.0"
+tqdm = "^4.67.1"
 
 
 [build-system]
